@@ -53,12 +53,12 @@ final class PrivilegedRunner {
 final class NetEnforcementController {
     private let runner = PrivilegedRunner()
 
-    private let daemonLabel = "com.codex.netenforce"
+    private let daemonLabel = "com.netctl.netenforce"
     private let helperDir = "/Library/Application Support/MenuBarNetToggle"
     private let helperScriptPath = "/Library/Application Support/MenuBarNetToggle/enforce.sh"
     private let configPath = "/Library/Application Support/MenuBarNetToggle/config.conf"
-    private let daemonPlistPath = "/Library/LaunchDaemons/com.codex.netenforce.plist"
-    private let pidFile = "/var/run/com.codex.netenforce.pid"
+    private let daemonPlistPath = "/Library/LaunchDaemons/com.netctl.netenforce.plist"
+    private let pidFile = "/var/run/com.netctl.netenforce.pid"
 
     func defaultConfig() -> NetConfig {
         return NetConfig(allowlist: ["en0", "utun4", "lo0"], interval: 15)
@@ -289,7 +289,7 @@ final class NetEnforcementController {
 }
 
 final class LoginItemManager {
-    private let label = "com.codex.MenuBarNetToggle"
+    private let label = "com.netctl.MenuBarNetToggle"
 
     private var plistPath: String {
         let home = NSHomeDirectory()

@@ -9,7 +9,7 @@ The application appears in the menu bar as **NetCtl**. It provides controls for 
 
 ## What it does
 
-When enforcement is enabled, MenuBarNetToggle installs and starts a root-owned launch daemon named `com.codex.netenforce`. The daemon enumerates the Mac's network interfaces with `ifconfig -l`. On each pass, it runs `ifconfig <interface> down` for every interface that is absent from the configured allowlist.
+When enforcement is enabled, MenuBarNetToggle installs and starts a root-owned launch daemon named `com.netctl.netenforce`. The daemon enumerates the Mac's network interfaces with `ifconfig -l`. On each pass, it runs `ifconfig <interface> down` for every interface that is absent from the configured allowlist.
 
 The default source configuration is:
 
@@ -51,13 +51,13 @@ MenuBarNetToggle consists of two independently managed processes:
 ```text
 User session
   MenuBarNetToggle.app
-    Optional LaunchAgent: ~/Library/LaunchAgents/com.codex.MenuBarNetToggle.plist
+    Optional LaunchAgent: ~/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist
 
 System session
-  LaunchDaemon: /Library/LaunchDaemons/com.codex.netenforce.plist
+  LaunchDaemon: /Library/LaunchDaemons/com.netctl.netenforce.plist
     /bin/sh /Library/Application Support/MenuBarNetToggle/enforce.sh
       Configuration: /Library/Application Support/MenuBarNetToggle/config.conf
-      PID record: /var/run/com.codex.netenforce.pid
+      PID record: /var/run/com.netctl.netenforce.pid
 ```
 
 The menu-bar application runs as the signed-in user. It asks macOS for administrator authorization when it needs to create, update, start, or stop the system helper. The helper and its configuration are then owned by `root:wheel`.
@@ -193,7 +193,7 @@ Immediately confirm that required connectivity still works. If it does not, turn
 Select **NetCtl → Launch at Login**. This creates:
 
 ```text
-~/Library/LaunchAgents/com.codex.MenuBarNetToggle.plist
+~/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist
 ```
 
 The LaunchAgent points to the exact location of the running application. Move the app to `/Applications` before enabling this setting so the saved path remains valid.
@@ -222,7 +222,7 @@ Replacing the app does not automatically remove the existing root helper or conf
 
 ```sh
 pgrep -alf MenuBarNetToggle
-launchctl print "gui/$(id -u)/com.codex.MenuBarNetToggle"
+launchctl print "gui/$(id -u)/com.netctl.MenuBarNetToggle"
 ```
 
 The `launchctl print` command reports an error when Launch at Login is disabled or the LaunchAgent is not loaded.
@@ -230,16 +230,16 @@ The `launchctl print` command reports an error when Launch at Login is disabled 
 ### Enforcement helper
 
 ```sh
-launchctl print system/com.codex.netenforce
+launchctl print system/com.netctl.netenforce
 cat "/Library/Application Support/MenuBarNetToggle/config.conf"
-cat /var/run/com.codex.netenforce.pid
+cat /var/run/com.netctl.netenforce.pid
 ```
 
 Check ownership and permissions:
 
 ```sh
 ls -l "/Library/Application Support/MenuBarNetToggle"
-ls -l /Library/LaunchDaemons/com.codex.netenforce.plist
+ls -l /Library/LaunchDaemons/com.netctl.netenforce.plist
 ```
 
 Expected privileged files are owned by `root:wheel`. The helper script is executable, while the configuration and daemon property list are not.
@@ -259,15 +259,15 @@ An interface without the `UP` flag has been administratively brought down or is 
 The LaunchDaemon writes standard output and standard error to:
 
 ```text
-/var/log/com.codex.netenforce.out
-/var/log/com.codex.netenforce.err
+/var/log/com.netctl.netenforce.out
+/var/log/com.netctl.netenforce.err
 ```
 
 Inspect them without modifying them:
 
 ```sh
-sudo tail -n 100 /var/log/com.codex.netenforce.out
-sudo tail -n 100 /var/log/com.codex.netenforce.err
+sudo tail -n 100 /var/log/com.netctl.netenforce.out
+sudo tail -n 100 /var/log/com.netctl.netenforce.err
 ```
 
 Empty logs are normal when all helper commands complete successfully.
@@ -277,7 +277,7 @@ Empty logs are normal when all helper commands complete successfully.
 Select **NetCtl → Enforcement: On** and approve the administrator prompt. Confirm that the helper is no longer loaded:
 
 ```sh
-launchctl print system/com.codex.netenforce
+launchctl print system/com.netctl.netenforce
 ```
 
 The expected result is an error stating that the service could not be found.
@@ -301,22 +301,22 @@ Use the menu to turn **Enforcement** off, turn **Launch at Login** off, and then
 ### 2. Remove a remaining user LaunchAgent
 
 ```sh
-if launchctl print "gui/$(id -u)/com.codex.MenuBarNetToggle" >/dev/null 2>&1; then
-  launchctl bootout "gui/$(id -u)/com.codex.MenuBarNetToggle"
+if launchctl print "gui/$(id -u)/com.netctl.MenuBarNetToggle" >/dev/null 2>&1; then
+  launchctl bootout "gui/$(id -u)/com.netctl.MenuBarNetToggle"
 fi
-rm -f "$HOME/Library/LaunchAgents/com.codex.MenuBarNetToggle.plist"
+rm -f "$HOME/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist"
 ```
 
 ### 3. Remove the privileged helper
 
 ```sh
-if launchctl print system/com.codex.netenforce >/dev/null 2>&1; then
-  sudo launchctl bootout system/com.codex.netenforce
+if launchctl print system/com.netctl.netenforce >/dev/null 2>&1; then
+  sudo launchctl bootout system/com.netctl.netenforce
 fi
-sudo rm -f /Library/LaunchDaemons/com.codex.netenforce.plist
-sudo rm -f /var/run/com.codex.netenforce.pid
-sudo rm -f /var/log/com.codex.netenforce.out
-sudo rm -f /var/log/com.codex.netenforce.err
+sudo rm -f /Library/LaunchDaemons/com.netctl.netenforce.plist
+sudo rm -f /var/run/com.netctl.netenforce.pid
+sudo rm -f /var/log/com.netctl.netenforce.out
+sudo rm -f /var/log/com.netctl.netenforce.err
 sudo rm -rf "/Library/Application Support/MenuBarNetToggle"
 ```
 
@@ -338,9 +338,9 @@ rm -rf build
 
 ```sh
 pgrep -alf MenuBarNetToggle
-launchctl print system/com.codex.netenforce
-test ! -e "$HOME/Library/LaunchAgents/com.codex.MenuBarNetToggle.plist"
-test ! -e /Library/LaunchDaemons/com.codex.netenforce.plist
+launchctl print system/com.netctl.netenforce
+test ! -e "$HOME/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist"
+test ! -e /Library/LaunchDaemons/com.netctl.netenforce.plist
 test ! -e "/Library/Application Support/MenuBarNetToggle"
 ```
 
@@ -372,7 +372,7 @@ No privileged change is completed when macOS reports error `-128` for cancelled 
 That is expected. The system LaunchDaemon is independent of the menu-bar UI. Reopen the app and turn enforcement off, or stop the exact service from Terminal:
 
 ```sh
-sudo launchctl bootout system/com.codex.netenforce
+sudo launchctl bootout system/com.netctl.netenforce
 ```
 
 ### A VPN stopped working

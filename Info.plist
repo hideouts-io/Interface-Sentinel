@@ -5,7 +5,7 @@
     <key>CFBundleName</key>
     <string>MenuBarNetToggle</string>
     <key>CFBundleIdentifier</key>
-    <string>com.codex.MenuBarNetToggle</string>
+    <string>com.netctl.MenuBarNetToggle</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
