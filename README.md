@@ -1,15 +1,64 @@
 # Interface Sentinel
 
-Interface Sentinel is a small native macOS menu-bar utility that repeatedly keeps every network interface down except the interfaces you explicitly allow.
+### Native macOS network-interface allowlist enforcement from the menu bar
 
-The application appears in the menu bar as **NetCtl**. It provides controls for enabling or disabling enforcement, editing the interface allowlist and enforcement interval, and starting the menu-bar application automatically when you sign in.
+![Platform](https://img.shields.io/badge/platform-macOS%2013%2B-000000?logo=apple&logoColor=white)
+![Language](https://img.shields.io/badge/language-Swift-F05138?logo=swift&logoColor=white)
+![Runtime](https://img.shields.io/badge/runtime-native%20Cocoa-0969da)
+![Dependencies](https://img.shields.io/badge/third--party%20dependencies-none-1a7f37)
+![Distribution](https://img.shields.io/badge/signing-local%20ad--hoc-8250df)
 
 > [!CAUTION]
-> Enabling enforcement can immediately disconnect Wi-Fi, Ethernet, VPNs, virtual machines, AirDrop, device sharing, and other services if their interfaces are not in the allowlist. Identify the interfaces your Mac needs before turning enforcement on. Keep `lo0` allowed so local loopback networking continues to work.
+> Interface Sentinel can immediately disconnect Wi-Fi, Ethernet, VPNs, virtual machines, AirDrop, Continuity, device sharing, and remote administration when a required interface is missing from the allowlist. Identify the interfaces your Mac needs before enabling enforcement, keep `lo0` allowed, and test first on a non-critical Mac with a local recovery path.
 
-## What it does
+Interface Sentinel is a small native macOS menu-bar utility that continuously keeps every network interface down except the interfaces you explicitly allow. The menu-bar application appears as **NetCtl** and manages a root-owned LaunchDaemon that enforces the allowlist at a configurable interval.
 
-When enforcement is enabled, Interface Sentinel installs and starts a root-owned launch daemon named `com.netctl.netenforce`. The daemon enumerates the Mac's network interfaces with `ifconfig -l`. On each pass, it runs `ifconfig <interface> down` for every interface that is absent from the configured allowlist.
+The project is deliberately narrow:
+
+> Interface Sentinel controls whether an interface may remain up. It does not inspect, filter, classify, or attribute traffic carried by that interface.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Executive Summary](#executive-summary)
+- [Screenshots](#screenshots)
+- [Architecture](#architecture)
+- [Capabilities and Boundaries](#capabilities-and-boundaries)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Detailed Installation](#detailed-installation)
+- [Configure the Allowlist](#configure-the-allowlist)
+- [Operate Interface Sentinel](#operate-interface-sentinel)
+- [Verify a Running Installation](#verify-a-running-installation)
+- [Recovery](#recovery)
+- [Update](#update)
+- [Uninstall Completely](#uninstall-completely)
+- [Troubleshooting](#troubleshooting)
+- [Security and Privacy Model](#security-and-privacy-model)
+- [Repository Structure](#repository-structure)
+- [Development and Verification](#development-and-verification)
+- [Responsible Use](#responsible-use)
+- [License](#license)
+
+---
+
+## Overview
+
+macOS creates network interfaces for physical hardware, tunnels, peer-to-peer networking, virtualization, sharing services, and other system features. Interface Sentinel applies a simple host-level policy to those interfaces:
+
+```text
+Enumerate every interface -> compare it with the allowlist -> bring every non-allowed interface down -> wait -> repeat
+```
+
+When enforcement is enabled, Interface Sentinel installs and starts a root-owned LaunchDaemon named `com.netctl.netenforce`. Its helper enumerates interfaces with `ifconfig -l` and runs:
+
+```sh
+/sbin/ifconfig "<interface>" down
+```
+
+for each interface absent from the configured allowlist.
 
 The default source configuration is:
 
@@ -18,78 +67,192 @@ ALLOWLIST="en0 utun4 lo0"
 INTERVAL=15
 ```
 
-Do not assume these defaults match another Mac. In particular, `utun` numbers can change as VPNs and system networking services start and stop.
+These values are examples, not a safe universal configuration. Hardware-port names vary between Macs, and `utun` numbers can change as VPNs and Apple networking services start and stop.
 
-Interface Sentinel does not:
+---
 
-- inspect or capture packets;
-- send interface information to a remote service;
-- configure the macOS application firewall or Packet Filter (`pf`);
-- automatically restore interfaces that it previously brought down;
-- stop the root helper merely because the menu-bar application quits.
+## Executive Summary
 
-## Status indicator
+- Native Swift and Cocoa menu-bar application for macOS 13 or later.
+- Continuous interface allowlist enforcement at a configurable 1–3600 second interval.
+- Root-owned LaunchDaemon for enforcement independent of the signed-in user session.
+- Administrator authorization through the native macOS prompt when privileged files or service state must change.
+- Menu-bar indicator for the helper's observed running state.
+- Settings UI for space- or comma-separated interface names.
+- Duplicate interface removal and input validation before privileged configuration writes.
+- Optional per-user LaunchAgent to start the menu-bar application at sign-in.
+- No third-party runtime dependencies, packet capture, network upload, telemetry, or cloud service.
+- Complete verification, recovery, update, troubleshooting, and uninstall procedures below.
 
-The menu-bar title reflects the helper state:
+### Direct capability vs. interpretation
 
-| Indicator | Meaning |
+| Type | What Interface Sentinel provides |
 | --- | --- |
-| `NetCtl ○` | The enforcement daemon is not running. |
-| `NetCtl ●` | The enforcement daemon has a live process and enforcement is active. |
+| **Direct capability** | Repeatedly enumerates local interfaces with `ifconfig -l`. |
+| **Direct capability** | Brings every interface not present in the allowlist down with `ifconfig <name> down`. |
+| **Direct capability** | Stores enforcement configuration in a root-owned local file. |
+| **Direct capability** | Runs enforcement as a system LaunchDaemon independently of the menu-bar UI. |
+| **Direct capability** | Optionally starts the user-facing app at login with a per-user LaunchAgent. |
+| **Status boundary** | `NetCtl ●` means the PID recorded by the helper refers to a live process; it is not cryptographic proof of helper identity or proof that every interface is currently down. |
+| **Policy boundary** | An allowed interface may carry any destination, application, protocol, or content. Interface Sentinel is not a per-app or per-destination firewall. |
+| **Attribution boundary** | An unexpected interface is not by itself evidence of compromise; macOS, VPNs, virtualization, sharing, and security tools can create interfaces legitimately. |
 
-Open the menu to access:
+---
 
-- **Enforcement: On/Off** — installs, starts, or stops the privileged helper. macOS requests administrator authorization.
-- **Launch at Login** — creates or removes a per-user LaunchAgent for the menu-bar application.
-- **Settings…** — edits the allowlist and interval. Saving requires administrator authorization because the configuration is root-owned.
-- **Quit** — exits only the menu-bar application. It does not stop active enforcement.
+## Screenshots
+
+The screenshots were captured from the repository's locally built Cocoa application in a documentation-only launch with enforcement disabled. They use the source defaults and contain no private network capture, host inventory, credential, or device identifier.
+
+### Menu-bar controls
+
+![Interface Sentinel menu with enforcement disabled](evidence/interface-sentinel-menu.png)
+
+The menu exposes four focused actions:
+
+- **Enforcement: On/Off** installs, starts, or stops the privileged helper after administrator authorization.
+- **Launch at Login** creates or removes the per-user LaunchAgent.
+- **Settings…** edits the allowlist and enforcement interval.
+- **Quit** exits only the menu-bar application; it does not stop an active system LaunchDaemon.
+
+### Allowlist and interval settings
+
+![Interface Sentinel network enforcement settings](evidence/interface-sentinel-settings.png)
+
+The sample values in the screenshot are the source defaults. Do not copy them without first identifying the required interfaces on the target Mac.
+
+---
 
 ## Architecture
 
-Interface Sentinel consists of two independently managed processes:
+```mermaid
+flowchart TB
+    User[Signed-in user]
+    Menu[MenuBarNetToggle.app<br/>NetCtl menu-bar UI]
+    Login[Optional per-user LaunchAgent<br/>com.netctl.MenuBarNetToggle]
+    Auth[Native macOS administrator prompt]
+    Daemon[System LaunchDaemon<br/>com.netctl.netenforce]
+    Helper[Root shell helper<br/>enforce.sh]
+    Config[Root-owned config.conf<br/>allowlist + interval]
+    Interfaces[macOS network interfaces]
+
+    User --> Menu
+    Login --> Menu
+    Menu --> Auth
+    Auth --> Daemon
+    Auth --> Config
+    Daemon --> Helper
+    Config --> Helper
+    Helper -->|ifconfig -l| Interfaces
+    Helper -->|ifconfig interface down| Interfaces
+```
+
+### Installed components
 
 ```text
 User session
-  MenuBarNetToggle.app
-    Optional LaunchAgent: ~/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist
+  /Applications/MenuBarNetToggle.app
+  ~/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist   (optional)
 
 System session
-  LaunchDaemon: /Library/LaunchDaemons/com.netctl.netenforce.plist
-    /bin/sh /Library/Application Support/MenuBarNetToggle/enforce.sh
-      Configuration: /Library/Application Support/MenuBarNetToggle/config.conf
-      PID record: /var/run/com.netctl.netenforce.pid
+  /Library/LaunchDaemons/com.netctl.netenforce.plist
+  /Library/Application Support/MenuBarNetToggle/enforce.sh
+  /Library/Application Support/MenuBarNetToggle/config.conf
+  /var/run/com.netctl.netenforce.pid
+  /var/log/com.netctl.netenforce.out
+  /var/log/com.netctl.netenforce.err
 ```
 
-The menu-bar application runs as the signed-in user. It asks macOS for administrator authorization when it needs to create, update, start, or stop the system helper. The helper and its configuration are then owned by `root:wheel`.
+The two process lifecycles are intentionally independent:
 
-The launch-at-login setting and enforcement setting are intentionally separate:
+- Launch at Login can be enabled while enforcement is off.
+- Enforcement can remain active after the menu-bar application quits.
+- Logging out stops the user application, but the system LaunchDaemon can remain active.
+- Reopening the menu-bar application reconnects the UI to the helper's observed state.
 
-- Launch at Login can be on while enforcement is off.
-- Enforcement can remain on after the menu-bar application quits.
-- Logging out stops the menu-bar application, but the system LaunchDaemon can remain active.
+---
+
+## Capabilities and Boundaries
+
+### What it does
+
+- Enumerates all interface names returned by `/sbin/ifconfig -l`.
+- Compares each exact interface name with the configured allowlist.
+- Administratively brings non-allowed interfaces down.
+- Repeats enforcement at the configured interval.
+- Reloads the configuration file on each pass, so saved changes are used by the running helper without rebuilding the app.
+- Keeps the helper alive through launchd when enforcement is enabled.
+- Validates UI input before writing privileged configuration:
+  - allowlist cannot be empty;
+  - names can contain letters, numbers, `.`, `_`, `:`, and `-`;
+  - duplicate names are removed;
+  - interval must be between 1 and 3600 seconds.
+- Displays `NetCtl ○` when the helper is not observed running and `NetCtl ●` when its recorded PID is live.
+
+### What it does not do
+
+- It does not inspect, capture, decrypt, proxy, or export packets.
+- It does not identify which process created or uses an interface.
+- It does not determine whether an interface is malicious.
+- It does not restrict traffic on an allowed interface.
+- It does not configure the macOS Application Firewall, Packet Filter (`pf`), Network Extension policies, DNS, routes, or proxies.
+- It does not automatically discover a safe allowlist.
+- It does not automatically follow changing `utun` numbers.
+- It does not automatically bring an interface back up after enforcement stops.
+- It does not stop the root helper when the menu-bar application quits.
+- It does not include an updater, Developer ID signature, notarization ticket, or universal binary.
+- It does not send interface information or telemetry to a remote service.
+
+---
 
 ## Requirements
 
-- macOS 13 or later
-- Xcode or Xcode Command Line Tools with the Swift compiler
-- An administrator account to enable enforcement or change its privileged configuration
-- A native build performed on the target Mac
+- macOS 13 Ventura or later.
+- Apple silicon (`arm64`) or Intel (`x86_64`) Mac; the build targets the architecture of the Mac performing the build.
+- Xcode or Xcode Command Line Tools with `swiftc` and the macOS SDK.
+- An administrator account to enable enforcement or change the privileged configuration.
+- Local interactive access during initial configuration and testing.
 
-Check the developer tools before building:
+Check the required developer tools:
 
 ```sh
 xcode-select -p
 xcrun --find swiftc
+xcrun --sdk macosx --show-sdk-path
 swiftc --version
 ```
 
-If the tools are missing, install Apple's Command Line Tools:
+If the Command Line Tools are missing, request Apple's installer:
 
 ```sh
 xcode-select --install
 ```
 
-## Install from source
+---
+
+## Quick Start
+
+```sh
+git clone https://github.com/hideouts-io/Interface-Sentinel.git
+cd Interface-Sentinel
+./build.sh
+ditto build/MenuBarNetToggle.app /Applications/MenuBarNetToggle.app
+open /Applications/MenuBarNetToggle.app
+```
+
+Then:
+
+1. Open **NetCtl → Settings…**.
+2. Replace the example allowlist with interface names verified on the current Mac.
+3. Save the configuration and approve the native administrator prompt.
+4. Select **Enforcement: Off** to enable enforcement.
+5. Immediately confirm that required local and network access still works.
+
+> [!IMPORTANT]
+> Do not enable enforcement over the only SSH, Screen Sharing, VPN, or remote-management path to the Mac. A missing interface can sever the connection needed to recover it.
+
+---
+
+## Detailed Installation
 
 ### 1. Clone the repository
 
@@ -98,9 +261,9 @@ git clone https://github.com/hideouts-io/Interface-Sentinel.git
 cd Interface-Sentinel
 ```
 
-### 2. Review the source
+### 2. Review the privileged behavior
 
-This application intentionally performs privileged network-interface changes. Review at least these files before running it:
+Interface Sentinel intentionally performs root-level network-interface changes. Review the complete source before running it:
 
 ```sh
 less main.swift
@@ -108,9 +271,9 @@ less build.sh
 plutil -p Info.plist
 ```
 
-The helper script and LaunchDaemon are generated by `main.swift` only after you enable enforcement.
+The enforcement script and LaunchDaemon are generated from `main.swift` only after enforcement is enabled.
 
-### 3. Build and verify the application
+### 3. Build
 
 ```sh
 ./build.sh
@@ -118,30 +281,32 @@ The helper script and LaunchDaemon are generated by `main.swift` only after you 
 
 The build script:
 
-1. Compiles `main.swift` with Apple's Swift compiler and Cocoa framework.
-2. Creates `build/MenuBarNetToggle.app`.
-3. Applies a local ad-hoc code signature.
-4. Performs strict code-signature verification.
+1. Resolves the active macOS SDK.
+2. Compiles `main.swift` with Apple's Swift compiler and Cocoa framework.
+3. Creates `build/MenuBarNetToggle.app`.
+4. Applies a local ad-hoc signature.
+5. Performs strict code-signature verification.
 
-The resulting application targets macOS 13 or later and is built for the current Mac's architecture (`arm64` or `x86_64`). It is not a universal binary, Developer ID signed, or notarized for third-party distribution.
+The generated app targets macOS 13 or later and the current Mac's architecture. It is not universal, Developer ID signed, or notarized for third-party distribution.
 
-You can repeat the verification manually:
+### 4. Verify the build
 
 ```sh
 codesign --verify --deep --strict --verbose=2 build/MenuBarNetToggle.app
 codesign -d --verbose=4 build/MenuBarNetToggle.app
 file build/MenuBarNetToggle.app/Contents/MacOS/MenuBarNetToggle
+plutil -lint build/MenuBarNetToggle.app/Contents/Info.plist
 ```
 
-### 4. Copy the application into Applications
+### 5. Install the application
 
-Quit any older copy of Interface Sentinel first. The current application bundle is still named `MenuBarNetToggle.app` internally. Then copy the new bundle:
+Quit any older copy first. The public project name is Interface Sentinel, while the current bundle and executable retain the internal name `MenuBarNetToggle`.
 
 ```sh
 ditto build/MenuBarNetToggle.app /Applications/MenuBarNetToggle.app
 ```
 
-If `/Applications` is not writable by your account, run only the copy command with administrator privileges:
+If the current account cannot write to `/Applications`, elevate only the copy operation:
 
 ```sh
 sudo ditto build/MenuBarNetToggle.app /Applications/MenuBarNetToggle.app
@@ -153,19 +318,23 @@ Verify the installed copy:
 codesign --verify --deep --strict --verbose=2 /Applications/MenuBarNetToggle.app
 ```
 
-### 5. Start the menu-bar application
+### 6. Launch
 
 ```sh
 open /Applications/MenuBarNetToggle.app
 ```
 
-Look for `NetCtl ○` in the menu bar. The application is an agent-style app (`LSUIElement`) and therefore does not normally appear in the Dock.
+Look for `NetCtl ○` or `NetCtl ●` in the menu bar. Interface Sentinel is an agent-style application (`LSUIElement`) and does not normally appear in the Dock.
 
-### 6. Configure before enabling
+Do not enable enforcement until the allowlist has been reviewed for this Mac.
 
-Open **NetCtl → Settings…** and enter the interfaces that must stay usable. Separate interface names with spaces or commas. The interval must be between 1 and 3600 seconds.
+---
 
-Use these read-only commands to inspect the current Mac:
+## Configure the Allowlist
+
+### Inventory the current Mac
+
+Use read-only commands to identify interface names and their current roles:
 
 ```sh
 ifconfig -l
@@ -174,77 +343,145 @@ route -n get default
 scutil --nwi
 ```
 
-Typical interface names include:
+For a more detailed read-only view:
 
-- `lo0` — local loopback; normally keep this allowed.
-- `en0`, `en1`, and similar — Wi-Fi, Ethernet, or other hardware ports. Confirm them with `networksetup`; do not rely only on the name.
-- `utun0`, `utun1`, and similar — tunnel interfaces used by VPNs and some Apple networking features. Their numbering is not stable.
-- `bridge0` — a software bridge used by features such as Internet Sharing or virtualization.
-- `awdl0` and `llw0` — Apple peer-to-peer networking used by features such as AirDrop and Continuity.
+```sh
+for interface_name in $(ifconfig -l); do
+  echo "===== $interface_name ====="
+  ifconfig "$interface_name"
+done
+```
 
-### 7. Enable enforcement
+Review the output locally. A complete interface inventory can reveal hardware, VPN, virtualization, and network-service details that may not belong in a public issue or screenshot.
 
-Select **NetCtl → Enforcement: Off**. Approve the administrator prompt. The label changes to **Enforcement: On**, and the menu-bar indicator becomes `NetCtl ●` when the helper is running.
+### Common interface families
 
-Immediately confirm that required connectivity still works. If it does not, turn enforcement off and restore the affected interface before adjusting the allowlist.
+| Interface | Common role | Allowlist guidance |
+| --- | --- | --- |
+| `lo0` | Local loopback | Normally keep allowed. Many local services depend on it. |
+| `en0`, `en1`, … | Wi-Fi, Ethernet, adapters, or other hardware ports | Confirm the mapping with `networksetup -listallhardwareports`; do not assume the name. |
+| `utun0`, `utun1`, … | VPN tunnels and some Apple networking services | Allow only when required. Numbers are not stable across sessions. |
+| `bridge0` | Software bridge, Internet Sharing, or virtualization | Allow only when the associated feature is required. |
+| `awdl0` | Apple Wireless Direct Link used by AirDrop and Continuity features | Blocking it can disable peer-to-peer Apple features. |
+| `llw0` | Low-latency Apple wireless interface | Blocking it can affect nearby-device and Continuity behavior. |
+| `ap1` | Apple wireless access-point or sharing behavior on some systems | Confirm its current purpose before deciding. |
+| `stf0`, `gif0` | Tunnel interface types | Keep blocked unless a verified workflow requires them. |
 
-### 8. Optionally enable launch at login
+Interface names are only identifiers. Their presence does not prove malicious activity, and a familiar name does not prove safe use.
 
-Select **NetCtl → Launch at Login**. This creates:
+### Save settings
+
+Open **NetCtl → Settings…** and provide:
+
+- **Allowlist:** interface names separated by spaces or commas.
+- **Interval:** an integer from 1 to 3600 seconds.
+
+Saving requires administrator authorization because the configuration is written to:
+
+```text
+/Library/Application Support/MenuBarNetToggle/config.conf
+```
+
+The file is set to `root:wheel` ownership with mode `0644`. The running helper reads it again on every enforcement pass.
+
+### Choosing an interval
+
+- A short interval reduces the time an unexpected interface may remain up but increases command activity and reduces recovery time after a mistake.
+- A longer interval reduces enforcement frequency but leaves a wider window before a new interface is brought down.
+- The default is 15 seconds.
+
+The interval is not a guarantee of exact timing; launchd scheduling, system load, and the helper loop can affect when a pass completes.
+
+---
+
+## Operate Interface Sentinel
+
+### Status indicator
+
+| Indicator | Meaning |
+| --- | --- |
+| `NetCtl ○` | The PID record does not identify a currently live process. |
+| `NetCtl ●` | The helper's recorded PID is currently live and enforcement is treated as active. |
+
+The UI refreshes periodically and whenever the menu opens.
+
+### Enable enforcement
+
+1. Confirm local recovery access.
+2. Open **NetCtl**.
+3. Select **Enforcement: Off**.
+4. Review and approve the macOS administrator prompt.
+5. Confirm the menu changes to **Enforcement: On** and `NetCtl ●`.
+6. Immediately test required Wi-Fi, Ethernet, VPN, local-service, sharing, and administrative workflows.
+
+On first enable, the app creates or rewrites the root-owned configuration, helper script, and LaunchDaemon, then bootstraps the daemon in the system launchd domain.
+
+### Disable enforcement
+
+1. Open **NetCtl**.
+2. Select **Enforcement: On**.
+3. Approve the administrator prompt.
+4. Confirm `NetCtl ○` and verify the system service is absent.
+
+Disabling enforcement prevents future passes. It does not restore interfaces already brought down.
+
+### Launch at login
+
+Select **NetCtl → Launch at Login** to create:
 
 ```text
 ~/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist
 ```
 
-The LaunchAgent points to the exact location of the running application. Move the app to `/Applications` before enabling this setting so the saved path remains valid.
+The LaunchAgent records the exact path of the running application. Install the app in `/Applications` before enabling this option so the path remains stable.
 
-## Update an existing installation
+Launch at Login starts the user interface. It is separate from system enforcement and does not determine whether the root LaunchDaemon continues running.
 
-1. Turn **Enforcement** off if you want to avoid interface changes during the update.
-2. Turn **Launch at Login** off if the existing LaunchAgent points to a different app location.
-3. Quit Interface Sentinel (`MenuBarNetToggle`).
-4. Pull and rebuild the source.
-5. Replace the installed application.
-6. Start the new application and re-enable the desired settings.
+### Quit
 
-```sh
-git pull --ff-only
-./build.sh
-sudo ditto build/MenuBarNetToggle.app /Applications/MenuBarNetToggle.app
-open /Applications/MenuBarNetToggle.app
-```
+**Quit** terminates only the menu-bar application. It does not unload `com.netctl.netenforce` or restore disabled interfaces.
 
-Replacing the app does not automatically remove the existing root helper or configuration. Enabling enforcement from the rebuilt app rewrites those helper files using the current configuration.
+---
 
-## Verify a running installation
+## Verify a Running Installation
 
-### Menu-bar process
+### Application process
 
 ```sh
 pgrep -alf MenuBarNetToggle
+```
+
+If Launch at Login is enabled, inspect its user service:
+
+```sh
 launchctl print "gui/$(id -u)/com.netctl.MenuBarNetToggle"
 ```
 
-The `launchctl print` command reports an error when Launch at Login is disabled or the LaunchAgent is not loaded.
+An error is expected when the LaunchAgent is disabled or not loaded.
 
-### Enforcement helper
+### System enforcement service
 
 ```sh
 launchctl print system/com.netctl.netenforce
+```
+
+Inspect the active configuration and PID record:
+
+```sh
 cat "/Library/Application Support/MenuBarNetToggle/config.conf"
 cat /var/run/com.netctl.netenforce.pid
 ```
 
-Check ownership and permissions:
+### Ownership and permissions
 
 ```sh
-ls -l "/Library/Application Support/MenuBarNetToggle"
+ls -la "/Library/Application Support/MenuBarNetToggle"
 ls -l /Library/LaunchDaemons/com.netctl.netenforce.plist
 ```
 
-Expected privileged files are owned by `root:wheel`. The helper script is executable, while the configuration and daemon property list are not.
+Expected privileged files are owned by `root:wheel`. The helper script is executable; the configuration and LaunchDaemon property list are not.
 
-### Interface state
+### Current interface state
 
 ```sh
 for interface_name in $(ifconfig -l); do
@@ -252,29 +489,39 @@ for interface_name in $(ifconfig -l); do
 done
 ```
 
-An interface without the `UP` flag has been administratively brought down or is otherwise inactive. Interface status alone does not prove Interface Sentinel caused the state; correlate it with the daemon state and configuration.
+An interface without the `UP` flag is administratively down or otherwise inactive. Interface state alone does not prove Interface Sentinel caused it; correlate the state with the LaunchDaemon, configuration, PID, and timestamps.
 
 ### Logs
 
-The LaunchDaemon writes standard output and standard error to:
+The helper writes standard output and standard error to:
 
 ```text
 /var/log/com.netctl.netenforce.out
 /var/log/com.netctl.netenforce.err
 ```
 
-Inspect them without modifying them:
+Inspect recent entries without changing the files:
 
 ```sh
 sudo tail -n 100 /var/log/com.netctl.netenforce.out
 sudo tail -n 100 /var/log/com.netctl.netenforce.err
 ```
 
-Empty logs are normal when all helper commands complete successfully.
+Empty logs are normal when helper commands complete without producing output.
 
-## Stop enforcement safely
+---
 
-Select **NetCtl → Enforcement: On** and approve the administrator prompt. Confirm that the helper is no longer loaded:
+## Recovery
+
+### Stop the helper first
+
+Use **NetCtl → Enforcement: On** to turn enforcement off, or unload the exact system service from Terminal:
+
+```sh
+sudo launchctl bootout system/com.netctl.netenforce
+```
+
+Confirm it is gone:
 
 ```sh
 launchctl print system/com.netctl.netenforce
@@ -282,23 +529,54 @@ launchctl print system/com.netctl.netenforce
 
 The expected result is an error stating that the service could not be found.
 
-Stopping enforcement does not automatically bring previously disabled interfaces back up. The safest general recovery is to use macOS **System Settings → Network** to reconnect the required service. If you have positively identified the affected interface, you can bring that exact interface up manually:
+### Restore a verified interface
+
+The safest general recovery is macOS **System Settings → Network**, where the required service can be reconnected using its human-readable name.
+
+If the exact interface has been positively identified, bring only that interface up:
 
 ```sh
 sudo ifconfig en0 up
 ```
 
-Replace `en0` only with an interface name you verified on the current Mac.
+Replace `en0` with the verified interface name for the current Mac. If service state remains inconsistent, toggle the affected network service in System Settings or restart the Mac after confirming the helper is unloaded.
 
-## Uninstall completely
+### Remote lockout warning
 
-The **Quit** command and deleting the `.app` are not sufficient when enforcement or Launch at Login has been enabled. Use the following sequence to remove the user LaunchAgent, root LaunchDaemon, helper, configuration, PID record, logs, and application.
+If enforcement disabled the only remote-administration interface, recovery requires a separate path such as local keyboard/display access, another already-working management channel, or a planned restart with the helper removed or unloaded. Do not rely on the same network path that the policy is capable of disabling.
 
-### 1. Stop enforcement and quit the app
+---
 
-Use the menu to turn **Enforcement** off, turn **Launch at Login** off, and then choose **Quit**.
+## Update
 
-### 2. Remove a remaining user LaunchAgent
+1. Turn enforcement off if interface changes should pause during the update.
+2. Turn Launch at Login off if the existing LaunchAgent points to another app location.
+3. Quit Interface Sentinel.
+4. Pull, rebuild, and verify.
+5. Replace the installed application.
+6. Reopen the app and re-enable only the intended settings.
+
+```sh
+git pull --ff-only
+./build.sh
+codesign --verify --deep --strict --verbose=2 build/MenuBarNetToggle.app
+sudo ditto build/MenuBarNetToggle.app /Applications/MenuBarNetToggle.app
+open /Applications/MenuBarNetToggle.app
+```
+
+Replacing the `.app` does not automatically remove the existing root helper or configuration. Enabling enforcement from the rebuilt application rewrites those privileged files using the current configuration.
+
+---
+
+## Uninstall Completely
+
+Deleting the `.app` is not sufficient after enforcement or Launch at Login has been enabled.
+
+### 1. Disable services from the menu
+
+Turn **Enforcement** off, turn **Launch at Login** off, and choose **Quit**.
+
+### 2. Remove any remaining user LaunchAgent
 
 ```sh
 if launchctl print "gui/$(id -u)/com.netctl.MenuBarNetToggle" >/dev/null 2>&1; then
@@ -307,7 +585,7 @@ fi
 rm -f "$HOME/Library/LaunchAgents/com.netctl.MenuBarNetToggle.plist"
 ```
 
-### 3. Remove the privileged helper
+### 3. Remove the exact privileged components
 
 ```sh
 if launchctl print system/com.netctl.netenforce >/dev/null 2>&1; then
@@ -320,7 +598,7 @@ sudo rm -f /var/log/com.netctl.netenforce.err
 sudo rm -rf "/Library/Application Support/MenuBarNetToggle"
 ```
 
-These commands target only files created by Interface Sentinel. The configuration is deleted and cannot be recovered unless it was backed up separately.
+These paths are created by Interface Sentinel. Removing the application-support directory permanently deletes its configuration.
 
 ### 4. Remove the application
 
@@ -328,7 +606,7 @@ These commands target only files created by Interface Sentinel. The configuratio
 sudo rm -rf /Applications/MenuBarNetToggle.app
 ```
 
-If you ran the application directly from the source tree, also remove its generated build directory if desired:
+If the source checkout is no longer needed, its generated build directory can be removed separately from inside that checkout:
 
 ```sh
 rm -rf build
@@ -344,20 +622,20 @@ test ! -e /Library/LaunchDaemons/com.netctl.netenforce.plist
 test ! -e "/Library/Application Support/MenuBarNetToggle"
 ```
 
-The process search should return no MenuBarNetToggle process, both `launchctl print` checks should report that the services are absent, and the `test` commands should produce no output with a successful status.
+The process search should return no application process, `launchctl print` should report that the service is absent, and the `test` commands should produce no output and exit successfully.
+
+---
 
 ## Troubleshooting
 
 ### `NetCtl` does not appear
-
-Confirm that the process started:
 
 ```sh
 pgrep -alf MenuBarNetToggle
 open /Applications/MenuBarNetToggle.app
 ```
 
-If the process exits, launch the executable from Terminal to see immediate errors:
+If the process exits, run the executable from Terminal to observe immediate diagnostics:
 
 ```sh
 /Applications/MenuBarNetToggle.app/Contents/MacOS/MenuBarNetToggle
@@ -365,11 +643,11 @@ If the process exits, launch the executable from Terminal to see immediate error
 
 ### The administrator prompt was cancelled
 
-No privileged change is completed when macOS reports error `-128` for cancelled authorization. Reopen the menu and repeat the operation when ready.
+Cancellation produces AppleScript authorization error `-128`. No requested privileged change is completed. Reopen the menu and repeat the operation only when ready.
 
-### Enforcement says it is on after the app quits
+### Enforcement remains on after quitting
 
-That is expected. The system LaunchDaemon is independent of the menu-bar UI. Reopen the app and turn enforcement off, or stop the exact service from Terminal:
+This is expected. The system LaunchDaemon is independent of the menu-bar application. Reopen the app and disable enforcement, or unload the exact service:
 
 ```sh
 sudo launchctl bootout system/com.netctl.netenforce
@@ -377,68 +655,137 @@ sudo launchctl bootout system/com.netctl.netenforce
 
 ### A VPN stopped working
 
-Turn enforcement off first. Determine the VPN's current tunnel interface with `scutil --nwi` and the VPN application's diagnostics. Add the confirmed interface to the allowlist before re-enabling enforcement. Avoid assuming that a previously observed `utun` number remains correct.
+Disable enforcement first. Identify the VPN's current tunnel interface with `scutil --nwi` and the VPN application's own diagnostics. Add only the confirmed interface before re-enabling enforcement. Do not assume a previously observed `utun` number is still correct.
 
-### Wi-Fi or Ethernet remains unavailable after enforcement stops
+### AirDrop, Continuity, or sharing stopped working
 
-Stopping the helper prevents future enforcement passes but does not reverse prior `ifconfig ... down` commands. Reconnect the service in System Settings or bring the verified interface up manually. If macOS service state remains inconsistent, toggle the relevant network service off and on or restart the Mac after confirming the helper is unloaded.
+Disable enforcement and verify whether the workflow requires `awdl0`, `llw0`, `bridge0`, `ap1`, or another dynamically created interface. Enabling those features may create more than one interface.
+
+### Wi-Fi or Ethernet remains unavailable
+
+Stopping the helper prevents future enforcement passes but does not reverse previous `ifconfig ... down` commands. Reconnect the service in System Settings or bring the verified interface up manually after confirming the helper is unloaded.
+
+### Settings save but behavior does not change immediately
+
+The helper reads the configuration on each pass. Wait for the configured interval, then inspect the config file and helper state. Do not repeatedly enable enforcement while diagnosing.
 
 ### The build fails
-
-Confirm that the active developer directory and SDK are valid:
 
 ```sh
 xcode-select -p
 xcrun --sdk macosx --show-sdk-path
 xcrun --find swiftc
+swiftc --version
 ```
 
-If Xcode was moved or replaced, select the intended installation explicitly:
+If Xcode was moved or replaced, select the installation actually present on the Mac:
 
 ```sh
 sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
 ```
 
-Use the path of the Xcode installation actually present on the Mac.
+### `launchctl print` reports that the service is absent
 
-## Security model and limitations
+That is expected when the relevant LaunchAgent or LaunchDaemon is disabled. If the UI claims enforcement is active, inspect the PID file, running process, and daemon logs together rather than relying on a single signal.
 
-- The GUI is locally ad-hoc signed by the build script. This provides bundle integrity checking but not publisher identity or Apple notarization.
-- Enabling or changing enforcement requires an administrator authorization prompt.
-- The helper, configuration, and LaunchDaemon are written as root-owned files.
-- The helper executes as root because changing arbitrary interface state requires elevated privileges.
-- The configuration is sourced by a root shell. Do not change its ownership or grant untrusted users write access.
-- Interface names are validated by the GUI, but the design remains intentionally small and is not a replacement for a hardened privileged-helper architecture using `SMAppService` or XPC.
-- The PID file is a lightweight status mechanism. It is not a cryptographic proof of process identity.
-- Allowlisting an interface permits that interface to remain up; it does not restrict destinations, applications, protocols, or traffic content.
-- The project currently has no automatic update mechanism.
+---
 
-Review the code and test on a non-critical Mac before relying on it for operational controls.
+## Security and Privacy Model
 
-## Development
+### Privilege boundary
 
-The project deliberately avoids third-party dependencies and project generators. The complete application is built from:
+- The menu-bar application runs as the signed-in user.
+- Privileged operations use a native macOS administrator authorization prompt.
+- The LaunchDaemon and helper run as root because arbitrary interface state changes require elevated privileges.
+- The helper, configuration, and daemon property list are written with `root:wheel` ownership.
+- The configuration is sourced by a root shell. Do not make it writable by untrusted users or processes.
+
+### Code-signing boundary
+
+`build.sh` applies a local ad-hoc signature and verifies bundle integrity. Ad-hoc signing does not establish publisher identity, Developer ID trust, notarization, or App Store review.
+
+### Status boundary
+
+The PID file is a lightweight liveness mechanism. A live PID is not proof that the process is the expected helper, that the latest enforcement pass succeeded, or that all non-allowed interfaces remain down. Use launchd state, process details, configuration, logs, and interface state together when assurance matters.
+
+### Privacy
+
+Interface Sentinel has no telemetry or cloud integration and does not capture packet contents. Its local configuration and diagnostic output can still expose:
+
+- interface names and installed network capabilities;
+- VPN or tunnel presence;
+- virtualization or sharing features;
+- application paths in the LaunchAgent;
+- usernames contained in home-directory paths;
+- host-specific process IDs and timestamps.
+
+Before opening a public issue, redact private paths, usernames, device identifiers, IP addresses, endpoint inventories, VPN details, and unrelated log content. Do not publish a complete `ifconfig`, `scutil --nwi`, LaunchAgent, or LaunchDaemon dump without reviewing it first.
+
+### Design limitations
+
+- The project uses AppleScript authorization and generated shell/launchd files instead of a hardened `SMAppService` or XPC privileged-helper architecture.
+- The stop and status model is intentionally lightweight.
+- An allowlist entry is an exact interface-name match, not a stable identity tied to hardware or a service.
+- Dynamic interfaces can appear under different names after reconnects or restarts.
+- An attacker or root process with sufficient privileges can modify interface state outside this application's control.
+- Interface enforcement is not a substitute for firewall policy, endpoint security, network monitoring, or incident-response investigation.
+
+---
+
+## Repository Structure
 
 ```text
 Interface-Sentinel/
+├── .gitignore
 ├── Info.plist
 ├── README.md
 ├── build.sh
+├── evidence/
+│   ├── interface-sentinel-menu.png
+│   └── interface-sentinel-settings.png
 └── main.swift
 ```
 
-Build artifacts are written beneath `build/` and excluded from Git.
+| Path | Purpose |
+| --- | --- |
+| `.gitignore` | Excludes generated local build artifacts. |
+| `main.swift` | Menu-bar UI, configuration validation, privileged helper generation, launchd management, and login-item management. |
+| `build.sh` | Native Swift compilation, app-bundle creation, ad-hoc signing, and strict signature verification. |
+| `Info.plist` | Bundle identity, version, executable, macOS agent-app behavior, and display properties. |
+| `evidence/` | Sanitized project-specific screenshots used by this README. |
+| `build/` | Generated local bundle and module cache; excluded from version control. |
 
-Before proposing a change:
+The project has no third-party runtime dependencies or package manager.
+
+---
+
+## Development and Verification
+
+Build and validate the repository:
 
 ```sh
 ./build.sh
 plutil -lint Info.plist
+plutil -lint build/MenuBarNetToggle.app/Contents/Info.plist
 codesign --verify --deep --strict --verbose=2 build/MenuBarNetToggle.app
+file build/MenuBarNetToggle.app/Contents/MacOS/MenuBarNetToggle
+git diff --check
 ```
 
-Changes affecting allowlist validation, launchd paths, privilege boundaries, or uninstall behavior should be tested against real macOS launchd behavior. Do not test enforcement remotely unless you have a separate recovery path; an incorrect allowlist can sever the connection used to administer the Mac.
+Changes affecting allowlist validation, launchd domains, privileged paths, quoting, file ownership, helper lifecycle, or uninstall behavior require real macOS integration testing. A compile-only check cannot validate launchd and interface behavior.
+
+Test enforcement on a non-critical Mac with direct local access. Do not test over the only network path to the system.
+
+---
+
+## Responsible Use
+
+Use Interface Sentinel only on Macs you own or are explicitly authorized to administer. Bringing interfaces down can interrupt users, monitoring, backups, remote management, business applications, and safety-critical communications.
+
+Treat an unexpected interface as an investigation lead, not a conclusion. Establish its source and purpose with corroborating system, process, configuration, and network evidence before labeling it unauthorized or malicious.
+
+---
 
 ## License
 
-No open-source license has been selected yet. Copyright law therefore reserves the code by default. Add an explicit license before inviting third-party reuse or contributions.
+No open-source license has been selected for this repository. Copyright law therefore reserves the code by default. An explicit license should be added before inviting third-party reuse, redistribution, or contributions.
