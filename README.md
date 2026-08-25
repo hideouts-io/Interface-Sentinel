@@ -1,6 +1,6 @@
-# MenuBarNetToggle
+# Interface Sentinel
 
-MenuBarNetToggle is a small native macOS menu-bar utility that repeatedly keeps every network interface down except the interfaces you explicitly allow.
+Interface Sentinel is a small native macOS menu-bar utility that repeatedly keeps every network interface down except the interfaces you explicitly allow.
 
 The application appears in the menu bar as **NetCtl**. It provides controls for enabling or disabling enforcement, editing the interface allowlist and enforcement interval, and starting the menu-bar application automatically when you sign in.
 
@@ -9,7 +9,7 @@ The application appears in the menu bar as **NetCtl**. It provides controls for 
 
 ## What it does
 
-When enforcement is enabled, MenuBarNetToggle installs and starts a root-owned launch daemon named `com.netctl.netenforce`. The daemon enumerates the Mac's network interfaces with `ifconfig -l`. On each pass, it runs `ifconfig <interface> down` for every interface that is absent from the configured allowlist.
+When enforcement is enabled, Interface Sentinel installs and starts a root-owned launch daemon named `com.netctl.netenforce`. The daemon enumerates the Mac's network interfaces with `ifconfig -l`. On each pass, it runs `ifconfig <interface> down` for every interface that is absent from the configured allowlist.
 
 The default source configuration is:
 
@@ -20,7 +20,7 @@ INTERVAL=15
 
 Do not assume these defaults match another Mac. In particular, `utun` numbers can change as VPNs and system networking services start and stop.
 
-MenuBarNetToggle does not:
+Interface Sentinel does not:
 
 - inspect or capture packets;
 - send interface information to a remote service;
@@ -46,7 +46,7 @@ Open the menu to access:
 
 ## Architecture
 
-MenuBarNetToggle consists of two independently managed processes:
+Interface Sentinel consists of two independently managed processes:
 
 ```text
 User session
@@ -94,8 +94,8 @@ xcode-select --install
 ### 1. Clone the repository
 
 ```sh
-git clone https://github.com/hideouts-io/MenuBarNetToggle.git
-cd MenuBarNetToggle
+git clone https://github.com/hideouts-io/Interface-Sentinel.git
+cd Interface-Sentinel
 ```
 
 ### 2. Review the source
@@ -135,7 +135,7 @@ file build/MenuBarNetToggle.app/Contents/MacOS/MenuBarNetToggle
 
 ### 4. Copy the application into Applications
 
-Quit any older copy of MenuBarNetToggle first. Then copy the new bundle:
+Quit any older copy of Interface Sentinel first. The current application bundle is still named `MenuBarNetToggle.app` internally. Then copy the new bundle:
 
 ```sh
 ditto build/MenuBarNetToggle.app /Applications/MenuBarNetToggle.app
@@ -202,7 +202,7 @@ The LaunchAgent points to the exact location of the running application. Move th
 
 1. Turn **Enforcement** off if you want to avoid interface changes during the update.
 2. Turn **Launch at Login** off if the existing LaunchAgent points to a different app location.
-3. Quit MenuBarNetToggle.
+3. Quit Interface Sentinel (`MenuBarNetToggle`).
 4. Pull and rebuild the source.
 5. Replace the installed application.
 6. Start the new application and re-enable the desired settings.
@@ -252,7 +252,7 @@ for interface_name in $(ifconfig -l); do
 done
 ```
 
-An interface without the `UP` flag has been administratively brought down or is otherwise inactive. Interface status alone does not prove MenuBarNetToggle caused the state; correlate it with the daemon state and configuration.
+An interface without the `UP` flag has been administratively brought down or is otherwise inactive. Interface status alone does not prove Interface Sentinel caused the state; correlate it with the daemon state and configuration.
 
 ### Logs
 
@@ -320,7 +320,7 @@ sudo rm -f /var/log/com.netctl.netenforce.err
 sudo rm -rf "/Library/Application Support/MenuBarNetToggle"
 ```
 
-These commands target only files created by MenuBarNetToggle. The configuration is deleted and cannot be recovered unless it was backed up separately.
+These commands target only files created by Interface Sentinel. The configuration is deleted and cannot be recovered unless it was backed up separately.
 
 ### 4. Remove the application
 
@@ -420,7 +420,7 @@ Review the code and test on a non-critical Mac before relying on it for operatio
 The project deliberately avoids third-party dependencies and project generators. The complete application is built from:
 
 ```text
-MenuBarNetToggle/
+Interface-Sentinel/
 ├── Info.plist
 ├── README.md
 ├── build.sh
