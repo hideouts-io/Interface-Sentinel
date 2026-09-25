@@ -788,4 +788,4 @@ Treat an unexpected interface as an investigation lead, not a conclusion. Establ
 
 ## License
 
-No open-source license has been selected for this repository. Copyright law therefore reserves the code by default. An explicit license should be added before inviting third-party reuse, redistribution, or contributions.
+Interface Sentinel is released under the [MIT License](LICENSE).
