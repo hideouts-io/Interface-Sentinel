@@ -6,6 +6,7 @@ readonly APP_NAME="MenuBarNetToggle"
 readonly PROJECT_DIR="${0:A:h}"
 readonly SOURCE_FILE="$PROJECT_DIR/main.swift"
 readonly INFO_PLIST="$PROJECT_DIR/Info.plist"
+readonly APP_ICON="$PROJECT_DIR/assets/AppIcon.icns"
 readonly BUILD_DIR="$PROJECT_DIR/build"
 readonly APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 readonly EXECUTABLE="$APP_BUNDLE/Contents/MacOS/$APP_NAME"
@@ -25,6 +26,11 @@ if [[ ! -f "$INFO_PLIST" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$APP_ICON" ]]; then
+  print -u2 "Application icon not found: $APP_ICON"
+  exit 1
+fi
+
 /bin/rm -rf "$APP_BUNDLE" "$MODULE_CACHE"
 /bin/mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources" "$MODULE_CACHE"
 
@@ -38,6 +44,7 @@ fi
   "$SOURCE_FILE"
 
 /bin/cp "$INFO_PLIST" "$APP_BUNDLE/Contents/Info.plist"
+/bin/cp "$APP_ICON" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 /usr/bin/codesign --force --deep --sign - "$APP_BUNDLE"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
 

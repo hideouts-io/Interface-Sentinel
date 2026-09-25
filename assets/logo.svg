@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <circle cx="512" cy="512" r="500" fill="#000" stroke="#D8D8D8" stroke-width="10"/>
+  <g transform="translate(512 512) scale(0.92) translate(-512 -540)"><g>
+  <polygon points="190,240 400,240 512,520 624,240 834,240 512,880"
+           fill="#A81C18" stroke="#FFFFFF" stroke-width="18" stroke-linejoin="miter"/>
+  <clipPath id="vclip"><polygon points="190,240 400,240 512,520 624,240 834,240 512,880"/></clipPath>
+  <g clip-path="url(#vclip)">
+    <rect x="150" y="430" width="520" height="70" fill="#F4F1EA"/>
+  </g>
+  <path d="M392,330 Q512,215 632,330 Q512,445 392,330 Z" fill="#F4F1EA" stroke="#000" stroke-width="10"/>
+  <circle cx="512" cy="330" r="50" fill="#A81C18"/>
+  <circle cx="512" cy="330" r="24" fill="#000"/>
+  <circle cx="527" cy="316" r="8" fill="#FFF"/>
+  <rect x="232" y="560" width="560" height="140" fill="#FFFFFF"/>
+  <rect x="248" y="576" width="528" height="108" fill="none" stroke="#000" stroke-width="10"/>
+  <text x="512" y="660" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial"
+        font-weight="bold" font-size="84" letter-spacing="4" fill="#000">SENTINEL</text>
+</g></g>
+</svg>

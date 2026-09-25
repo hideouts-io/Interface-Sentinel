@@ -12,6 +12,8 @@
     <string>1.0</string>
     <key>CFBundleExecutable</key>
     <string>MenuBarNetToggle</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSUIElement</key>

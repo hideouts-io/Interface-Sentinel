@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="Interface Sentinel logo" width="220">
+</p>
+
 # Interface Sentinel
 
 ### Native macOS network-interface allowlist enforcement from the menu bar
@@ -739,6 +743,11 @@ Interface-Sentinel/
 ├── .gitignore
 ├── Info.plist
 ├── README.md
+├── assets/
+│   ├── AppIcon.icns
+│   ├── AppIcon.svg
+│   ├── logo.png
+│   └── logo.svg
 ├── build.sh
 ├── evidence/
 │   ├── interface-sentinel-menu.png
@@ -752,6 +761,7 @@ Interface-Sentinel/
 | `main.swift` | Menu-bar UI, configuration validation, privileged helper generation, launchd management, and login-item management. |
 | `build.sh` | Native Swift compilation, app-bundle creation, ad-hoc signing, and strict signature verification. |
 | `Info.plist` | Bundle identity, version, executable, macOS agent-app behavior, and display properties. |
+| `assets/` | Project logo used by this README and the app icon bundled into the app by `build.sh`. |
 | `evidence/` | Sanitized project-specific screenshots used by this README. |
 | `build/` | Generated local bundle and module cache; excluded from version control. |
 
