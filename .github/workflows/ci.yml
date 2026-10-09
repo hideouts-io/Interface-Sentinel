@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Native build
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Validate build script syntax
+        run: zsh -n build.sh
+      - name: Build and verify the native bundle
+        run: ./build.sh
+      - name: Validate bundle metadata and signature
+        run: |
+          plutil -lint build/MenuBarNetToggle.app/Contents/Info.plist
+          codesign --verify --deep --strict --verbose=2 build/MenuBarNetToggle.app
+          lipo build/MenuBarNetToggle.app/Contents/MacOS/MenuBarNetToggle -verify_arch arm64
